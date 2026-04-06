@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mário de Andrade - Realidade Aumentada</title>
+
+    <!-- A-Frame e AR.js para NFT -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            background: #000;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            border-radius: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            pointer-events: auto;
+            max-width: 90%;
+            margin: 0 auto;
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .header p {
+            color: #aaa;
+            font-size: 13px;
+        }
+
+        .status-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            box-shadow: 0 0 10px #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.found {
+            background: #44ff44;
+            box-shadow: 0 0 15px #44ff44;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .scan-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 280px;
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scan-guide::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, transparent);
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-140px); }
+            100% { transform: translateY(140px); }
+        }
+
+        .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-color: #667eea;
+            border-style: solid;
+            border-width: 0;
+        }
+
+        .corner.tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 10px; }
+        .corner.tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 10px; }
+        .corner.bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 10px; }
+        .corner.br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 10px; }
+
+        .footer {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+            pointer-events: auto;
+            max-width: 90%;
+            margin: 0 auto 20px;
+        }
+
+        .footer p {
+            color: #fff;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .btn-capture {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            pointer-events: auto;
+            transition: transform 0.2s;
+        }
+
+        .btn-capture:hover {
+            transform: scale(1.05);
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: white;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+
+        .ar-scene {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loading">
+        <div class="loader"></div>
+        <div class="loading-text">Iniciando experiência AR...</div>
+    </div>
+
+    <!-- UI Layer -->
+    <div class="ui-layer">
+        <div class="header">
+            <h1>📚 Mário de Andrade</h1>
+            <p>Aponte a câmera para a foto do escritor</p>
+            <div class="status-container">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Procurando imagem...</span>
+            </div>
+        </div>
+
+        <div class="scan-guide">
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+        </div>
+
+        <div class="footer">
+            <p>Experiência de Realidade Aumentada<br>Modernismo Brasileiro</p>
+            <button class="btn-capture" onclick="captureAR()">📸 Salvar Foto</button>
+        </div>
+    </div>
+
+    <!-- AR Scene -->
+    <a-scene 
+        embedded
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; antialias: true; colorManagement: true;"
+        loading-screen="enabled: false">
+
+        <a-assets>
+            <!-- Pré-carregar recursos -->
+            <img id="icon-book" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z'/%3E%3C/svg%3E" crossorigin="anonymous">
+        </a-assets>
+
+        <!-- NFT Marker - Usando a imagem do Mário de Andrade -->
+        <!-- IMPORTANTE: Substitua 'mario-andrade' pelo nome dos arquivos .fset gerados -->
+        <a-nft 
+            id="nft-marker"
+            type="nft" 
+            url="https://arjs-cors-proxy.herokuapp.com/https://raw.githack.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex/trex-image/trex"
+            smooth="true" 
+            smoothCount="10" 
+            smoothTolerance="0.01" 
+            smoothThreshold="5"
+            emitevents="true">
+
+            <!-- Container do conteúdo -->
+            <a-entity position="100 0 -200" scale="2 2 2">
+
+                <!-- Fundo do card -->
+                <a-plane 
+                    color="#1a1a2e" 
+                    width="350" 
+                    height="280" 
+                    opacity="0.95"
+                    material="transparent: true; shader: flat;"
+                    position="0 0 -10">
+                </a-plane>
+
+                <!-- Borda decorativa -->
+                <a-plane 
+                    color="#667eea" 
+                    width="354" 
+                    height="284" 
+                    opacity="0.8"
+                    position="0 0 -11">
+                </a-plane>
+
+                <!-- Título -->
+                <a-text 
+                    value="Mário de Andrade" 
+                    align="center" 
+                    color="#667eea" 
+                    width="450" 
+                    position="0 110 0"
+                    font="kelsonsans"
+                    shader="msdf">
+                </a-text>
+
+                <!-- Subtítulo -->
+                <a-text 
+                    value="1893-1945 | Patriarca da Modernização" 
+                    align="center" 
+                    color="#aaa" 
+                    width="280" 
+                    position="0 80 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <!-- Linha divisória -->
+                <a-plane 
+                    color="#667eea" 
+                    width="300" 
+                    height="2" 
+                    position="0 55 0"
+                    opacity="0.5">
+                </a-plane>
+
+                <!-- Texto principal dividido em linhas -->
+                <a-text 
+                    value="Intelectual paulistano multifacetado," 
+                    align="left" 
+                    color="#fff" 
+                    width="320" 
+                    position="-140 30 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <a-text 
+                    value="figura central do Modernismo brasileiro" 
+                    align="left" 
+                    color="#fff" 
+                    width="320" 
+                    position="-140 0 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <a-text 
+                    value="e organizador da Semana de 1922." 
+                    align="left" 
+                    color="#fff" 
+                    width="320" 
+                    position="-140 -30 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <a-text 
+                    value="Poeta, romancista, musicólogo e" 
+                    align="left" 
+                    color="#ddd" 
+                    width="300" 
+                    position="-140 -60 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <a-text 
+                    value="folclorista. Autor de 'Macunaíma'." 
+                    align="left" 
+                    color="#ddd" 
+                    width="300" 
+                    position="-140 -90 0"
+                    font="kelsonsans">
+                </a-text>
+
+                <!-- Ícone decorativo -->
+                <a-circle 
+                    color="#667eea" 
+                    radius="15" 
+                    position="130 -90 5"
+                    opacity="0.2">
+                </a-circle>
+
+                <!-- Animação sutil de flutuação -->
+                <a-animation 
+                    attribute="position" 
+                    from="100 0 -200" 
+                    to="100 10 -200" 
+                    dur="3000" 
+                    direction="alternate" 
+                    repeat="indefinite"
+                    easing="ease-in-out">
+                </a-animation>
+
+            </a-entity>
+
+        </a-nft>
+
+        <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+        // Elementos UI
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const loading = document.getElementById('loading');
+        const nftMarker = document.getElementById('nft-marker');
+
+        // Eventos do marcador
+        nftMarker.addEventListener('markerFound', (e) => {
+            console.log('Marcador encontrado!');
+            statusDot.classList.add('found');
+            statusText.textContent = 'Imagem detectada! ✓';
+            statusText.style.color = '#44ff44';
+
+            // Esconder guia de scan
+            document.querySelector('.scan-guide').style.opacity = '0';
+        });
+
+        nftMarker.addEventListener('markerLost', (e) => {
+            console.log('Marcador perdido');
+            statusDot.classList.remove('found');
+            statusText.textContent = 'Procurando imagem...';
+            statusText.style.color = '#fff';
+            document.querySelector('.scan-guide').style.opacity = '1';
+        });
+
+        // Remover loading
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                loading.classList.add('hidden');
+            }, 3000);
+        });
+
+        // Capturar tela
+        function captureAR() {
+            const scene = document.querySelector('a-scene');
+
+            // Usar canvas da cena
+            const canvas = scene.components.screenshot.getCanvas('perspective');
+
+            // Criar link de download
+            const link = document.createElement('a');
+            link.download = 'mario-andrade-ar-' + Date.now() + '.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            // Feedback
+            const btn = event.target;
+            btn.textContent = '✓ Salvo!';
+            setTimeout(() => {
+                btn.textContent = '📸 Salvar Foto';
+            }, 2000);
+        }
+
+        // Prevenir zoom
+        document.addEventListener('touchmove', (e) => {
+            if (e.scale !== 1) e.preventDefault();
+        }, { passive: false });
+
+        // Orientação
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 300);
+        });
+    </script>
+</body>
+</html>
